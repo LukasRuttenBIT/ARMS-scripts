@@ -231,8 +231,15 @@ filtRs <- file.path(path.cut, "filtered", basename(cutRs))
 # Set filter and trim parameters.
 
 out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, truncLen =c(200,130),maxN = 0, maxEE = c(2,4), 
-                     truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = T) 
+                     truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = T)
 
+# Remove samples with zero reads after filtering
+exists <- file.exists(filtFs) & file.exists(filtRs)
+if (any(!exists)) message("Skipping ", sum(!exists), " sample(s) with zero reads after filtering: ",
+                          paste(sample.names[!exists], collapse=", "))
+filtFs      <- filtFs[exists]
+filtRs      <- filtRs[exists]
+sample.names <- sample.names[exists]
 
 # Save this output as RDS file for the read tracking table created downstream:
 saveRDS(out, file = file.path(coi_dir, paste("filter_and_trim_out_", img_id, "_mod4.rds", sep = "")))
@@ -446,7 +453,7 @@ write.table(track,
 # load all batches in fastq_files directory
 path    <- file.path("novaseq", "COI", "fastq_files")
 batch_list <- list.files(path, pattern = "Batch")
-
+#batch_list <- c("Batch_2")
 # run load filter_and_trim function on each batch
 
 for (batch in batch_list){

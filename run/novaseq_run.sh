@@ -4,7 +4,7 @@ export PATH=/envs/git_env/bin:$PATH
 
 set -e
 
-cd /PATH/TO/open-arms
+cd /cfs/klemming/home/g/gusrutlu/TestProject/ARMS-scripts
 
 # filter and trim using cutadapt and dada2. ASV inference using dada2.
 Rscript novaseq/scripts/project_scripts/loessErrfun_mod4_sol.R -d /envs/git_env/bin/cutadapt
@@ -63,7 +63,7 @@ echo "-----------------LULU curation done-----------------"
 grep -w -A 1 -f novaseq/COI/MOTU/lulu_curated_headers.txt novaseq/COI/MOTU/COI_cluster_reps_lulu_ready.fa --no-group-separator > novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa
 
 # taxonomic assignment using BOLDigger3 on public animal library (--db 1) on exhaustive search mode (--mode 3)
-pip install boldigger3==2.1.4
+pip install boldigger3==2.3.0
 pip install lxml-html-clean==0.4.3
 boldigger3 identify novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa --db 1 --mode 3
 

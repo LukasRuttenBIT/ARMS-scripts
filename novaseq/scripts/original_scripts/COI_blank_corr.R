@@ -8,7 +8,7 @@ if(!dir.exists(output_dir)) dir.create(output_dir)
 
 # read COI sample summary and extract negative control IDs
 
-coi_summary <- read.csv("metadata/generated_meta/koster_coi_2022_2023.csv", 
+coi_summary <- read.csv("metadata/generated_meta/COI_batch3.4.5.6.csv", 
                         sep = ",", header = TRUE)
 coi_negative <- c(unique(coi_summary$PCR_negative_control_Code_1), unique(coi_summary$PCR_negative_control_Code_2))
 
