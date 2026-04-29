@@ -16,6 +16,9 @@
 # Number of nodes
 #SBATCH --nodes=1
 
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=128G
+
 #SBATCH --mail-user=lukas.rutten@student.howest.be
 #SBATCH --mail-type=ALL
 

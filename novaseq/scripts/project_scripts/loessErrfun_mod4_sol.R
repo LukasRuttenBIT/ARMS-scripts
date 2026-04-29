@@ -61,6 +61,9 @@ library(ShortRead)
 library(Biostrings)
 library(ggplot2)
 
+NTHREADS <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
+NTHREADS <- max(1, min(NTHREADS, 4))
+message("Using ", NTHREADS, " thread(s)")
 
 # generate matched lists of the forward and reverse read files, as well as parsing out the sample name
 fnFs <- list.files(path, pattern = ".fastq", full.names = TRUE)
@@ -104,8 +107,15 @@ primerHits <- function(primer, fn) {
   nhits <- vcountPattern(primer, sread(read_fastq), fixed = FALSE)
   return(sum(nhits > 0))
 }
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs), 
-      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs))
+# Only check one representative forward/reverse pair to avoid loading all FASTQ files into memory
+primer_idx <- min(2, length(fnFs))
+primer_check_F <- fnFs[primer_idx]
+primer_check_R <- fnRs[primer_idx]
+
+rbind(
+  FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = primer_check_F),
+  REV.ReverseReads = sapply(REV.orients, primerHits, fn = primer_check_R)
+)
 
 # Output:
 # FWD primer should mainly be found in the forward reads in its forward orientation.
@@ -141,8 +151,14 @@ for(i in seq_along(fnFs)) {
 
 # Count the presence of primers in the first cutadapt-ed sample to check if cutadapt worked as intended:
 
-rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut),
-      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut))
+primer_idx_cut <- min(2, length(fnFs.cut))
+primer_check_F_cut <- fnFs.cut[primer_idx_cut]
+primer_check_R_cut <- fnRs.cut[primer_idx_cut]
+
+rbind(
+  FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = primer_check_F_cut),
+  REV.ReverseReads = sapply(REV.orients, primerHits, fn = primer_check_R_cut)
+)
 
 # The primer-free sequence read files are now ready to be analyzed.
 # Similar to the earlier steps of reading in FASTQ files, read in the names of the cutadapt-ed FASTQ files. 
@@ -230,8 +246,33 @@ filtRs <- file.path(path.cut, "filtered", basename(cutRs))
 
 # Set filter and trim parameters.
 
-out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, truncLen =c(200,130),maxN = 0, maxEE = c(2,4), 
-                     truncQ = 2, minLen = 50, rm.phix = TRUE, compress = TRUE, multithread = T)
+# Make sure the filtered output directory exists
+filtered_dir <- file.path(path.cut, "filtered")
+if (!dir.exists(filtered_dir)) dir.create(filtered_dir, recursive = TRUE)
+
+# Filter and trim sample-by-sample to reduce memory usage
+out_list <- vector("list", length(cutFs))
+
+for (i in seq_along(cutFs)) {
+  message("Filtering sample ", i, "/", length(cutFs), ": ", basename(cutFs[i]))
+
+  out_list[[i]] <- filterAndTrim(
+    cutFs[i], filtFs[i],
+    cutRs[i], filtRs[i],
+    truncLen = c(200, 130),
+    maxN = 0,
+    maxEE = c(2, 4),
+    truncQ = 2,
+    minLen = 50,
+    rm.phix = TRUE,
+    compress = TRUE,
+    multithread = FALSE
+  )
+
+  gc()
+}
+
+out <- do.call(rbind, out_list)
 
 # Remove samples with zero reads after filtering
 exists <- file.exists(filtFs) & file.exists(filtRs)
@@ -327,14 +368,14 @@ set.seed(100)
 
 errF <- learnErrors(
   filtFs,
-  multithread = TRUE,
+  multithread = NTHREADS,
   errorEstimationFunction = loessErrfun_mod4,
   verbose = TRUE
 )
 
 errR <- learnErrors(
   filtRs,
-  multithread = TRUE,
+  multithread = NTHREADS,
   errorEstimationFunction = loessErrfun_mod4,
   verbose = TRUE
 )
@@ -366,9 +407,8 @@ ggsave(paste0("COI_", img_id, "_mod4_error_reverse.jpg"),
 
 # Set pool = pseudo", see https://benjjneb.github.io/dada2/pool.html
 
-dadaFs <- dada(filtFs, err = errF, multithread = T, pool = "pseudo")
-dadaRs <- dada(filtRs, err = errR, multithread = T, pool = "pseudo")
-
+dadaFs <- dada(filtFs, err = errF, multithread = NTHREADS, pool = "pseudo")
+dadaRs <- dada(filtRs, err = errR, multithread = NTHREADS, pool = "pseudo")
 
 # Apply the sample names extracted earlier (see above) to remove the long fastq.gz file names
 names(dadaFs) <- sample.names
