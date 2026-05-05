@@ -1,6 +1,6 @@
-# This is my project. I am doing a test run on the protocol from Nauras and then I will do the whole dataset. 
 
-## These are the steps:
+
+## Steps of pipeline:
 
 ### Filter and trim using cutadapt 
 
