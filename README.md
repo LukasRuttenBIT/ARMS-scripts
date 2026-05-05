@@ -205,14 +205,66 @@ Main outputs include:
 `novaseq/COI/MOTU/motu_table_COI.txt`
 
 ### Step 8: BLAST match list for LULU
+Command: `makeblastdb 
+  -in novaseq/COI/MOTU/COI_cluster_reps_lulu_ready.fa 
+  -parse_seqids 
+  -dbtype nucl`
 
+  `blastn 
+  -db novaseq/COI/MOTU/COI_cluster_reps_lulu_ready.fa 
+  -outfmt '6 qseqid sseqid pident' 
+  -out novaseq/COI/MOTU/match_list.txt 
+  -qcov_hsp_perc 80 
+  -perc_identity 84 
+  -query novaseq/COI/MOTU/COI_cluster_reps_lulu_ready.fa`
 
+This creates a sequence similarity match list required by LULU.
 
+Main outputs include:
 
+`novaseq/COI/MOTU/match_list.txt`
 
+### Step 9: LULU curation
+Script: `novaseq/scripts/original_scripts/LULU_curation.R`
 
+Run command: `Rscript novaseq/scripts/original_scripts/LULU_curation.R`
 
+LULU reduces likely erroneous MOTUs using sequence similarity and co-occurrence information.
 
+Main outputs include:
+
+`novaseq/COI/MOTU/lulu_motu_table_COI.txt`
+
+`novaseq/COI/MOTU/motu_map_lulu_COI.txt`
+
+`novaseq/COI/MOTU/lulu_curated_headers.txt`
+
+`novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa` 
+
+### Step 10: Taxonomic assignment with BOLDigger3
+Command: `boldigger3 identify novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa --db 2 --mode 2`
+
+BOLDigger3 assigns taxonomy to the curated MOTU representative sequences.
+
+### Step 11: Taxonomic table creation
+Script: `novaseq/scripts/project_scripts/BOLDigger_tax_table.R`
+
+Run command: `Rscript novaseq/scripts/project_scripts/BOLDigger_tax_table.R`  
+
+This script converts BOLDigger output into taxonomy tables and combines taxonomy with MOTU counts.
+
+Main final outputs include:
+
+`novaseq/COI/BOLDigger/boldigger_tax_table.txt`
+
+`novaseq/COI/BOLDigger/COI_motu_count_table_merged_species.txt`
+
+`novaseq/COI/BOLDigger/COI_motu_tax_table_merged_species.txt`
+
+## 7. Running the full pipeline
+Submit the job: `sbatch run/novaseq_slurm.sh`
+
+Check job status: `squeue -u |PDC-username|`
 
 
 
