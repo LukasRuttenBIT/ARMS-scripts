@@ -35,4 +35,29 @@ Raw paired-end COI FASTQ files
 -> Graphs and data paper
 
 ## 2. Software and tools
+The pipeline uses the following tools:
 
+HPC / container system:
+- Dardel HPC
+- SLURM
+- Apptainer
+- PDC module environment
+
+R packages:
+- dada2
+- Shortread
+- Biostrings
+- ggplot2
+- readxl
+- data.table
+- tidyverse
+- lulu
+
+Command-line tools:
+- cutadapt
+- MACSE
+- swarm
+- BLAST+
+- BOLDigger3
+
+## Getting repository on Dardel
