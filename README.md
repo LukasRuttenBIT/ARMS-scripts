@@ -60,4 +60,45 @@ Command-line tools:
 - BLAST+
 - BOLDigger3
 
-## Getting repository on Dardel
+## 3. Getting repository on Dardel
+To get repository on Dardel -> Clone this GitHub
+
+`cd /cfs/klemming/projects/...`
+
+`git clone <GITHUB_REPOSITORY_URL> ARMS-scripts`
+
+Another option is to use Rsync to copy existing directory from home to project storage
+
+## 4. Input data organisation
+The first R script expects FASTQ files to be organised by batch under:
+
+`novaseq/COI/fastq_files/`
+
+The data files can be ordered by different batches inside the /fastq-files directory
+
+For example: `noveseq/COI/fastq_files/Batch_1`
+
+To get the FASTQ files in the correct place, use the Rscript `new_symlink.R`
+
+## 5. Metadata
+The metadata file used for the current 2022-2025 ARMS-MBON processing is:
+
+`metadata/generated_meta/COI_batch.3.4.5.csv`
+
+This metadata is used later in the pipeline, especially for blank correction.
+
+The metadata also contains sample identifiers that can be used for downstream plotting, for example to extract deployment and retrieval dates from MaterialSampleID.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
