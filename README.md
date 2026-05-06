@@ -80,6 +80,33 @@ For example: `noveseq/COI/fastq_files/Batch_1`
 
 To get the FASTQ files in the correct place, use the Rscript `new_symlink.R`
 
+### 4.1 Building the Apptainer Sandbox and conda environment on Dardel
+The pipeline is run inside an Apptainer sandbox. The sandbox is built from a Miniconda Docker image, and the required conda environment is then created inside a separate directory that is mounted into the container as /envs.
+
+First, load the required Dardel modules:
+
+`module load PDC/24.11`
+
+`module load apptainer/1.4.0-cpeGNU-24.11`
+
+Build the sandbox in the temporary Dardel directory:
+
+`apptainer build --sandbox $PDC_TMP/temparms-sandbox docker://continuumio/miniconda3:25.3.1-1`
+
+Create a directory for the conda environments:
+
+`mkdir -p $PDC_TMP/conda_envs`
+
+Create the conda environment from the repository environment file:
+
+`apptainer exec 
+  --bind /path/to/ARMS-scripts:/work 
+  --bind $PDC_TMP/conda_envs:/envs 
+  $PDC_TMP/temparms-sandbox 
+  conda env create -f /work/environment/git_env.yml -p /envs/git_env`
+
+Replace /path/to/ARMS-scripts with the actual GitHub repository location on Dardel.
+
 ## 5. Metadata
 The metadata file used for the current 2022-2025 ARMS-MBON processing is:
 
