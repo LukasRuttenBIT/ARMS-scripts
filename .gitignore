@@ -32,3 +32,13 @@ lulu.log_20260112_140629
 **/.DS_Store
 
 openarms_container.def
+
+# LULU logs
+lulu.log_*
+
+sbatch_jobs/*.err
+sbatch_jobs/*.out
+*.err
+*.out
+
+metadata/generated_meta/COI_batch3.4.5.6.csv
