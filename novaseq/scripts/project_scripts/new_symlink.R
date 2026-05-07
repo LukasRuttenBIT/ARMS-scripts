@@ -24,7 +24,7 @@ pcr2_dir   <- file.path(source_dir, "NEGATIVE_CONTROLS", "pcr2")
 code_dir   <- file.path(source_dir, "COI", "COI_primers_m1COIintF_jgHCO2198")
 
 # Target directory (your pipeline input)
-fastq_dir  <- "/cfs/klemming/home/g/gusrutlu/TestProject/ARMS-scripts/novaseq/COI/fastq_files"
+fastq_dir  <- "/cfs/klemming/projects/supr/naiss2025-23-46/Lukas/ARMS-scripts/novaseq/COI/fastq_files"
 
 # Metadata CSV — UPDATE THIS WHEN ADDING NEW BATCHES
 csv_path   <- "metadata/generated_meta/COI_batch3.4.5.6.csv"

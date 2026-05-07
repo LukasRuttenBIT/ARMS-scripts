@@ -4,11 +4,13 @@ export PATH=/envs/git_env/bin:$PATH
 
 set -e
 
-cd /cfs/klemming/home/g/gusrutlu/TestProject/ARMS-scripts
+cd /work
 
 # filter and trim using cutadapt and dada2. ASV inference using dada2.
 Rscript novaseq/scripts/project_scripts/loessErrfun_mod4_sol.R -d /envs/git_env/bin/cutadapt
 echo "-----------------filter and trim done-----------------"
+
+exit 0
 
 # remove chimeras and singletons
 Rscript novaseq/scripts/original_scripts/COI_chimera.R
@@ -62,10 +64,10 @@ echo "-----------------LULU curation done-----------------"
 # generate fasta files with remaining MOTUs after LULU curation
 grep -w -A 1 -f novaseq/COI/MOTU/lulu_curated_headers.txt novaseq/COI/MOTU/COI_cluster_reps_lulu_ready.fa --no-group-separator > novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa
 
-# taxonomic assignment using BOLDigger3 on public animal library (--db 1) on exhaustive search mode (--mode 3)
+# taxonomic assignment using BOLDigger3 on (public animal library) (--db 2) on exhaustive search mode (--mode 3) 2 = species
 pip install boldigger3==2.3.0
 pip install lxml-html-clean==0.4.3
-boldigger3 identify novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa --db 1 --mode 3
+boldigger3 identify novaseq/COI/MOTU/COI_cluster_reps_lulu_curated.fa --db 2 --mode 2
 
 echo "-----------------BOLDigger done-----------------"
 

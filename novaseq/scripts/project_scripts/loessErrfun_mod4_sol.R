@@ -492,8 +492,8 @@ write.table(track,
 
 # load all batches in fastq_files directory
 path    <- file.path("novaseq", "COI", "fastq_files")
-batch_list <- list.files(path, pattern = "Batch")
-#batch_list <- c("Batch_2")
+#batch_list <- list.files(path, pattern = "Batch")
+batch_list <- c("Batch_1")
 # run load filter_and_trim function on each batch
 
 for (batch in batch_list){
