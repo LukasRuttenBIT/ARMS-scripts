@@ -62,7 +62,7 @@ library(Biostrings)
 library(ggplot2)
 
 NTHREADS <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
-NTHREADS <- max(1, min(NTHREADS, 4))
+NTHREADS <- max(1, min(NTHREADS, 16))
 message("Using ", NTHREADS, " thread(s)")
 
 # generate matched lists of the forward and reverse read files, as well as parsing out the sample name
@@ -192,48 +192,101 @@ print(head(sample.names))
 # Inspect read quality profiles. 
 # If there are more than 20 samples, grab 20 randomly
 
-set.seed(1)
-
-if(length(cutFs) <= 20) {
-  fwd_qual_plots<-plotQualityProfile(cutFs) + 
-    scale_x_continuous(breaks=seq(0,300,20)) + 
-    scale_y_continuous(breaks=seq(0,40,5)) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-    geom_hline(yintercept = 30)
-  rev_qual_plots<-plotQualityProfile(cutRs) + 
-    scale_x_continuous(breaks=seq(0,300,20)) + 
-    scale_y_continuous(breaks=seq(0,40,5)) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-    geom_hline(yintercept = 30)
-} else {
-  rand_samples <- sample(size = 20, 1:length(cutFs)) # grab 20 random samples to plot
-  fwd_qual_plots <- plotQualityProfile(cutFs[rand_samples]) + 
-    scale_x_continuous(breaks=seq(0,300,20)) + 
-    scale_y_continuous(breaks=seq(0,40,5)) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-    geom_hline(yintercept = 30)
-  rev_qual_plots <- plotQualityProfile(cutRs[rand_samples]) + 
-    scale_x_continuous(breaks=seq(0,300,20)) + 
-    scale_y_continuous(breaks=seq(0,40,5)) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-    geom_hline(yintercept = 30)
+get_fastq_records <- function(f) {
+  tryCatch({
+    as.numeric(countFastq(f)$records)
+  }, error = function(e) {
+    warning("Could not count reads in ", f, ": ", conditionMessage(e))
+    0
+  })
 }
-# fwd_qual_plots
-# rev_qual_plots
 
+cutF_records <- sapply(cutFs, get_fastq_records)
+cutR_records <- sapply(cutRs, get_fastq_records)
 
-# Print out the forward quality plot
+plot_keep <- cutF_records > 0 & cutR_records > 0
 
-ggsave(paste0("COI_", img_id, "_quality_forward.jpg"),
-       plot = fwd_qual_plots, path = coi_dir, width = 15,
-       height = 8, units = "in", dpi = 300)
+if (sum(!plot_keep) > 0) {
+  warning(
+    "Skipping ", sum(!plot_keep),
+    " empty cutadapt file pair(s) for quality plotting: ",
+    paste(sample.names[!plot_keep], collapse = ", ")
+  )
+}
 
+qual_cutFs <- cutFs[plot_keep]
+qual_cutRs <- cutRs[plot_keep]
 
-# Print out the reverse quality plot
+if (length(qual_cutFs) == 0 || length(qual_cutRs) == 0) {
+  warning("No non-empty cutadapt files available for quality plotting in ", seq_batch)
+} else {
+  set.seed(1)
 
-ggsave(paste0("COI_", img_id, "_quality_reverse.jpg"),
-       plot = rev_qual_plots, path = coi_dir, width = 15,
-       height = 8, units = "in", dpi = 300)
+  if (length(qual_cutFs) > 20) {
+    qual_idx <- sample(seq_along(qual_cutFs), 20)
+  } else {
+    qual_idx <- seq_along(qual_cutFs)
+  }
+
+  tryCatch({
+    fwd_qual_plots <- plotQualityProfile(qual_cutFs[qual_idx]) +
+      scale_x_continuous(breaks = seq(0, 300, 20)) +
+      scale_y_continuous(breaks = seq(0, 40, 5)) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+      geom_hline(yintercept = 30)
+
+    ggsave(
+      paste0("COI_", img_id, "_quality_forward.jpg"),
+      plot = fwd_qual_plots,
+      path = coi_dir,
+      width = 15,
+      height = 8,
+      units = "in",
+      dpi = 300
+    )
+  }, error = function(e) {
+    warning("Forward quality plot failed for ", seq_batch, ": ", conditionMessage(e))
+  })
+
+  tryCatch({
+    rev_qual_plots <- plotQualityProfile(qual_cutRs[qual_idx]) +
+      scale_x_continuous(breaks = seq(0, 300, 20)) +
+      scale_y_continuous(breaks = seq(0, 40, 5)) +
+      theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+      geom_hline(yintercept = 30)
+
+    ggsave(
+      paste0("COI_", img_id, "_quality_reverse.jpg"),
+      plot = rev_qual_plots,
+      path = coi_dir,
+      width = 15,
+      height = 8,
+      units = "in",
+      dpi = 300
+    )
+  }, error = function(e) {
+    warning("Reverse quality plot failed for ", seq_batch, ": ", conditionMessage(e))
+  })
+}
+
+# Remove empty cutadapt output pairs before filtering
+keep_nonempty <- cutF_records > 0 & cutR_records > 0
+
+if (sum(!keep_nonempty) > 0) {
+  warning(
+    "Removing ", sum(!keep_nonempty),
+    " empty cutadapt output pair(s) before filtering: ",
+    paste(sample.names[!keep_nonempty], collapse = ", ")
+  )
+}
+
+cutFs <- cutFs[keep_nonempty]
+cutRs <- cutRs[keep_nonempty]
+sample.names <- sample.names[keep_nonempty]
+
+if (length(cutFs) == 0 || length(cutRs) == 0) {
+  stop("No non-empty cutadapt output files remain for ", seq_batch)
+}
 
 
 ## Filter and trim ##
@@ -250,29 +303,23 @@ filtRs <- file.path(path.cut, "filtered", basename(cutRs))
 filtered_dir <- file.path(path.cut, "filtered")
 if (!dir.exists(filtered_dir)) dir.create(filtered_dir, recursive = TRUE)
 
-# Filter and trim sample-by-sample to reduce memory usage
-out_list <- vector("list", length(cutFs))
+# Filter and trim all non-empty samples in the current batch at once
+message("Filtering all ", length(cutFs), " sample pair(s) at once for ", seq_batch)
 
-for (i in seq_along(cutFs)) {
-  message("Filtering sample ", i, "/", length(cutFs), ": ", basename(cutFs[i]))
+out <- filterAndTrim(
+  cutFs, filtFs,
+  cutRs, filtRs,
+  truncLen = c(200, 130),
+  maxN = 0,
+  maxEE = c(2, 4),
+  truncQ = 2,
+  minLen = 50,
+  rm.phix = TRUE,
+  compress = TRUE,
+  multithread = NTHREADS
+)
 
-  out_list[[i]] <- filterAndTrim(
-    cutFs[i], filtFs[i],
-    cutRs[i], filtRs[i],
-    truncLen = c(200, 130),
-    maxN = 0,
-    maxEE = c(2, 4),
-    truncQ = 2,
-    minLen = 50,
-    rm.phix = TRUE,
-    compress = TRUE,
-    multithread = FALSE
-  )
-
-  gc()
-}
-
-out <- do.call(rbind, out_list)
+gc()
 
 # Remove samples with zero reads after filtering
 exists <- file.exists(filtFs) & file.exists(filtRs)
@@ -493,7 +540,7 @@ write.table(track,
 # load all batches in fastq_files directory
 path    <- file.path("novaseq", "COI", "fastq_files")
 #batch_list <- list.files(path, pattern = "Batch")
-batch_list <- c("Batch_1")
+batch_list <- c("Batch_3")
 # run load filter_and_trim function on each batch
 
 for (batch in batch_list){
