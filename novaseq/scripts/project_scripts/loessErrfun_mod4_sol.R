@@ -61,9 +61,7 @@ library(ShortRead)
 library(Biostrings)
 library(ggplot2)
 
-NTHREADS <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
-NTHREADS <- max(1, min(NTHREADS, 16))
-message("Using ", NTHREADS, " thread(s)")
+
 
 # generate matched lists of the forward and reverse read files, as well as parsing out the sample name
 fnFs <- list.files(path, pattern = ".fastq", full.names = TRUE)
@@ -306,20 +304,44 @@ if (!dir.exists(filtered_dir)) dir.create(filtered_dir, recursive = TRUE)
 # Filter and trim all non-empty samples in the current batch at once
 message("Filtering all ", length(cutFs), " sample pair(s) at once for ", seq_batch)
 
-out <- filterAndTrim(
-  cutFs, filtFs,
-  cutRs, filtRs,
-  truncLen = c(200, 130),
-  maxN = 0,
-  maxEE = c(2, 4),
-  truncQ = 2,
-  minLen = 50,
-  rm.phix = TRUE,
-  compress = TRUE,
-  multithread = NTHREADS
-)
+# Filter and trim in chunks to avoid OOM on large batches
+chunk_size <- 20
 
-gc()
+out_list <- list()
+chunk_id <- 1
+
+for (start_i in seq(1, length(cutFs), by = chunk_size)) {
+  end_i <- min(start_i + chunk_size - 1, length(cutFs))
+  idx <- start_i:end_i
+
+  message(
+    "Filtering samples ",
+    start_i, "-",
+    end_i,
+    " of ",
+    length(cutFs),
+    " for ",
+    seq_batch
+  )
+
+  out_list[[chunk_id]] <- filterAndTrim(
+    cutFs[idx], filtFs[idx],
+    cutRs[idx], filtRs[idx],
+    truncLen = c(200, 130),
+    maxN = 0,
+    maxEE = c(2, 4),
+    truncQ = 2,
+    minLen = 50,
+    rm.phix = TRUE,
+    compress = TRUE,
+    multithread = NTHREADS
+  )
+
+  chunk_id <- chunk_id + 1
+  gc()
+}
+
+out <- do.call(rbind, out_list)
 
 # Remove samples with zero reads after filtering
 exists <- file.exists(filtFs) & file.exists(filtRs)
@@ -415,14 +437,14 @@ set.seed(100)
 
 errF <- learnErrors(
   filtFs,
-  multithread = NTHREADS,
+  multithread = T,
   errorEstimationFunction = loessErrfun_mod4,
   verbose = TRUE
 )
 
 errR <- learnErrors(
   filtRs,
-  multithread = NTHREADS,
+  multithread = T,
   errorEstimationFunction = loessErrfun_mod4,
   verbose = TRUE
 )
@@ -454,8 +476,8 @@ ggsave(paste0("COI_", img_id, "_mod4_error_reverse.jpg"),
 
 # Set pool = pseudo", see https://benjjneb.github.io/dada2/pool.html
 
-dadaFs <- dada(filtFs, err = errF, multithread = NTHREADS, pool = "pseudo")
-dadaRs <- dada(filtRs, err = errR, multithread = NTHREADS, pool = "pseudo")
+dadaFs <- dada(filtFs, err = errF, multithread = T, pool = "pseudo")
+dadaRs <- dada(filtRs, err = errR, multithread = T, pool = "pseudo")
 
 # Apply the sample names extracted earlier (see above) to remove the long fastq.gz file names
 names(dadaFs) <- sample.names
@@ -473,6 +495,8 @@ saveRDS(dadaRs, file = file.path(coi_dir, paste("dadaRs_", img_id, "_mod4.rds", 
 
 mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs,
                       minOverlap = 10, maxMismatch = 1, verbose = TRUE)
+
+names(mergers) <- sample.names
 
 saveRDS(mergers, file = file.path(coi_dir, paste("mergers_", img_id, "_mod4.rds", sep = "")))
 
@@ -501,46 +525,69 @@ saveRDS(seqtab, file = file.path(coi_dir, paste("seqtab_", img_id, "_mod4.rds", 
 
 ## Track reads throughout the pipeline ##
 
-# Get number of reads in files prior to cutadapt application
-
-input <- countFastq(path, pattern = ".fastq")          # get statistics from input files
+# Count reads in original input FASTQ files
+input <- countFastq(path, pattern = ".fastq")
 input$Sample <- rownames(input)
-input$Sample <- gsub("_2.*", "", input$Sample)       # Remove all characters after the first _2 in file names
-input <- aggregate(.~Sample, input, FUN = "mean")   # Aggregate forward and reverse read files 
 
+# Convert raw FASTQ filenames to the same sample name format used elsewhere
+input$Sample <- sapply(input$Sample, get.sample.name)
 
-# Get number of reads from each step of dada2 pipeline
+# Forward and reverse files should have the same number of reads,
+# so aggregate them using the mean
+input <- aggregate(records ~ Sample, input, FUN = mean)
 
+# Make input counts named by sample
+input_counts <- setNames(input$records, input$Sample)
+
+# Get number of reads from each DADA2 step
 getN <- function(x) sum(getUniques(x))
 
-if(length(sample.names) == 1) {
-    track <- cbind(out, getN(dadaFs), getN(dadaRs), getN(mergers))
-} else {
-    track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers,getN)) }
+denoisedF <- sapply(dadaFs, getN)
+denoisedR <- sapply(dadaRs, getN)
+merged <- sapply(mergers, getN)
 
-colnames(track) <- c("cutadapt", "filtered", "denoisedF", "denoisedR", "merged")
-rownames(track) <- sample.names
+# Make sure the filterAndTrim output has the same row names
+# as the samples that are still present
+out <- as.data.frame(out)
+rownames(out) <- sample.names
 
+# Build tracking table by matching sample names, not by row position
+track <- data.frame(
+  input = input_counts[sample.names],
+  cutadapt = out[sample.names, 1],
+  filtered = out[sample.names, 2],
+  denoisedF = denoisedF[sample.names],
+  denoisedR = denoisedR[sample.names],
+  merged = merged[sample.names],
+  row.names = sample.names
+)
 
-# Combine with read numbers from input files
+colnames(track) <- c("input", "cutadapt", "filtered", "denoisedF", "denoisedR", "merged")
 
-input<-input[order(match(input[,1],rownames(track))),]
-track<-cbind(input$records,track)
-colnames(track)[1] <- "input"
-
-
-# Save to file
-
-write.table(track, 
-            file = file.path(coi_dir, paste("track_", img_id, "_mod4.txt", sep = "")),
-            sep = "\t", col.names = NA)
-
+# Sanity checks
+if (any(track$cutadapt > track$input, na.rm = TRUE)) {
+  warning("Some cutadapt counts are larger than input counts. Tracking table may still be misaligned.")
 }
 
+if (any(track$filtered > track$cutadapt, na.rm = TRUE)) {
+  warning("Some filtered counts are larger than cutadapt counts. Tracking table may still be misaligned.")
+}
+
+# Save to file
+write.table(
+  track,
+  file = file.path(coi_dir, paste("track_", img_id, "_mod4.txt", sep = "")),
+  sep = "\t",
+  col.names = NA
+)
+
+}
 # load all batches in fastq_files directory
 path    <- file.path("novaseq", "COI", "fastq_files")
 #batch_list <- list.files(path, pattern = "Batch")
-batch_list <- c("Batch_3")
+batch_list <- c(
+  "Batch_7","Batch_9", "Batch_10"
+)
 # run load filter_and_trim function on each batch
 
 for (batch in batch_list){

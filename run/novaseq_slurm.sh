@@ -8,16 +8,15 @@
 #SBATCH -J openarms_lukas_2022_2025
 
 # The partition
-#SBATCH -p main
+#SBATCH -p long
 
 # 24 hours wall clock time will be given to this job
-#SBATCH -t 24:00:00
+#SBATCH -t 72:00:00
 
 # Number of nodes
 #SBATCH --nodes=1
 
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+
 
 #SBATCH --mail-user=lukas.rutten@student.howest.be
 #SBATCH --mail-type=ALL
