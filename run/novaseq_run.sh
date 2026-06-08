@@ -7,18 +7,30 @@ set -e
 cd /work
 
 # filter and trim using cutadapt and dada2. ASV inference using dada2.
-Rscript novaseq/scripts/project_scripts/loessErrfun_mod4_sol.R -d /envs/git_env/bin/cutadapt
-echo "-----------------filter and trim done-----------------"
+#Rscript novaseq/scripts/project_scripts/loessErrfun_mod4_sol.R -d /envs/git_env/bin/cutadapt
+#echo "-----------------filter and trim done-----------------"
+
+
+
+# remove chimeras and singletons
+#Rscript novaseq/scripts/original_scripts/COI_chimera.R
+#echo "-----------------chimera removal done-----------------"
+
+
+
+# identify and remove nuclear mitochondrial DNA pseudogenes (nuMTs)
+Rscript novaseq/scripts/original_scripts/MACSE_align_pseudo2.R \
+  -d /envs/git_env/share/macse-2.07-0/macse_v2.07.jar \
+  --datadir novaseq \
+  -c 4
+echo "-----------------nuMT removal done-----------------"
 
 exit 0
 
-# remove chimeras and singletons
-Rscript novaseq/scripts/original_scripts/COI_chimera.R
-echo "-----------------chimera removal done-----------------"
 
-# identify and remove nuclear mitochondrial DNA pseudogenes (nuMTs)
-Rscript novaseq/scripts/original_scripts/MACSE_align_pseudo.R -d /envs/git_env/share/macse-2.07-0/macse_v2.07.jar
-echo "-----------------nuMT removal done-----------------"
+
+
+
 
 # subset non-nuMT ASVs from the COI_nochim_nosingle.fa file
 grep -w -A 1 -f novaseq/COI/pseudo/nonpseudo.combined.names.txt novaseq/COI/COI_nochim_nosingle_ASVs.fa > novaseq/COI/pseudo/COI_nochim_nosingle_nopseudo.fa  --no-group-separator

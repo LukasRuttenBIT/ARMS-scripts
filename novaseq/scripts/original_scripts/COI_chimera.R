@@ -9,11 +9,19 @@ input_dir <- file.path("novaseq", "COI")
 output_dir <- file.path("novaseq", "COI")
 
 # load sequencing batch numbers
-batch_dir    <- file.path("novaseq", "COI", "fastq_files")
-batch_list <- list.files(batch_dir, pattern = "Batch")
+batch_dir <- file.path("novaseq", "COI", "fastq_files")
 
-get_sample_name <- function(fname) strsplit(basename(fname), "_")[[1]][2]
-coi_run <- unname(sapply(batch_list, get_sample_name))
+# Only use real batch folders, e.g. Batch_1, Batch_2, ..., Batch_11
+batch_list <- list.files(batch_dir, pattern = "^Batch_[0-9]+$")
+
+# Sort batches numerically
+batch_list <- batch_list[order(as.numeric(gsub("^Batch_", "", batch_list)))]
+
+# Extract batch numbers
+coi_run <- gsub("^Batch_", "", batch_list)
+
+message("Batches used for chimera removal: ", paste(batch_list, collapse = ", "))
+message("Batch numbers: ", paste(coi_run, collapse = ", "))
 
 # Load the sequence tables of the different sequence runs
 
@@ -27,14 +35,19 @@ for (run in coi_run) {
 # Merge sequence tables
 
 if (length(rds_list) > 1) {
-  # Merge sequence tables
-  merged <- do.call(mergeSequenceTables, unname(rds_list))
+  merged <- do.call(
+    mergeSequenceTables,
+    c(unname(rds_list), list(repeats = "sum"))
+  )
+
   # Keep sequence reads with a length of 310, 313 or 316 bp only.
-  seqtab.filtered <- merged[,nchar(colnames(merged)) %in% c(310, 313, 316)]
+  seqtab.filtered <- merged[, nchar(colnames(merged)) %in% c(310, 313, 316)]
+
 } else { 
   merged <- as.matrix(rds_list[[1]])
-   # Keep sequence reads with a length of 310, 313 or 316 bp only.
-  seqtab.filtered <- merged[,nchar(colnames(merged)) %in% c(310, 313, 316)]
+
+  # Keep sequence reads with a length of 310, 313 or 316 bp only.
+  seqtab.filtered <- merged[, nchar(colnames(merged)) %in% c(310, 313, 316)]
 }
 
 saveRDS(merged, file = file.path(output_dir, "merged_seqtab_coi.rds"))
@@ -99,11 +112,18 @@ colnames(track_nochim_nosingle) <- c("length_filt", "nonchim", "nosingle")
 track_list <- list()
 for (run in coi_run) {
   track_file <- file.path(input_dir, paste("track_Batch", run, "_mod4.txt", sep = ""))
-  txt_track <- read.table(track_file, sep = "\t", header = T, row.names = 1)
+  txt_track <- read.table(track_file, sep = "\t", header = TRUE, row.names = 1, check.names = FALSE)
+  txt_track$sample_id <- rownames(txt_track)
   track_list[[as.character(run)]] <- txt_track
 }
 
 tracks <- do.call(rbind, unname(track_list))
+
+# Sum duplicate samples across batches, matching repeats = "sum" above
+tracks <- aggregate(. ~ sample_id, data = tracks, FUN = sum)
+
+rownames(tracks) <- tracks$sample_id
+tracks$sample_id <- NULL
 
 # Combine all tracking tables
 
@@ -117,7 +137,7 @@ track_coi$filtered_perc <- (track_coi$filtered / track_coi$input)*100
 track_coi$denoisedF_perc <- (track_coi$denoisedF / track_coi$input)*100
 track_coi$denoisedR_perc <- (track_coi$denoisedR / track_coi$input)*100
 track_coi$merged_perc <- (track_coi$merged / track_coi$input)*100
-track_coi$length_filt_perc <- (track_coi$length / track_coi$input)*100
+track_coi$length_filt_perc <- (track_coi$length_filt / track_coi$input)*100
 track_coi$nonchim_perc <- (track_coi$nonchim / track_coi$input)*100
 track_coi$nosingle_perc <- (track_coi$nosingle / track_coi$input)*100
 

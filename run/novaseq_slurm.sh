@@ -2,7 +2,7 @@
 
 # Set the allocation to be charged for this job
 # not required if you have set a default allocation
-#SBATCH -A naiss2025-22-761
+#SBATCH -A naiss2026-4-900
 
 # The name of the script is myjob
 #SBATCH -J openarms_lukas_2022_2025
@@ -16,7 +16,8 @@
 # Number of nodes
 #SBATCH --nodes=1
 
-
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=128G
 
 #SBATCH --mail-user=lukas.rutten@student.howest.be
 #SBATCH --mail-type=ALL

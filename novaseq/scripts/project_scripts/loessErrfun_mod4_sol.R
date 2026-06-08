@@ -334,7 +334,7 @@ for (start_i in seq(1, length(cutFs), by = chunk_size)) {
     minLen = 50,
     rm.phix = TRUE,
     compress = TRUE,
-    multithread = NTHREADS
+    multithread = T
   )
 
   chunk_id <- chunk_id + 1
@@ -345,11 +345,24 @@ out <- do.call(rbind, out_list)
 
 # Remove samples with zero reads after filtering
 exists <- file.exists(filtFs) & file.exists(filtRs)
-if (any(!exists)) message("Skipping ", sum(!exists), " sample(s) with zero reads after filtering: ",
-                          paste(sample.names[!exists], collapse=", "))
-filtFs      <- filtFs[exists]
-filtRs      <- filtRs[exists]
+
+if (any(!exists)) {
+  message(
+    "Skipping ", sum(!exists),
+    " sample(s) with zero reads after filtering: ",
+    paste(sample.names[!exists], collapse = ", ")
+  )
+}
+
+# Important: subset the filterAndTrim tracking table in the same way
+out <- as.data.frame(out)
+out <- out[exists, , drop = FALSE]
+
+filtFs <- filtFs[exists]
+filtRs <- filtRs[exists]
 sample.names <- sample.names[exists]
+
+rownames(out) <- sample.names
 
 # Save this output as RDS file for the read tracking table created downstream:
 saveRDS(out, file = file.path(coi_dir, paste("filter_and_trim_out_", img_id, "_mod4.rds", sep = "")))
@@ -437,14 +450,14 @@ set.seed(100)
 
 errF <- learnErrors(
   filtFs,
-  multithread = T,
+  multithread = FALSE,
   errorEstimationFunction = loessErrfun_mod4,
   verbose = TRUE
 )
 
 errR <- learnErrors(
   filtRs,
-  multithread = T,
+  multithread =FALSE,
   errorEstimationFunction = loessErrfun_mod4,
   verbose = TRUE
 )
@@ -476,8 +489,8 @@ ggsave(paste0("COI_", img_id, "_mod4_error_reverse.jpg"),
 
 # Set pool = pseudo", see https://benjjneb.github.io/dada2/pool.html
 
-dadaFs <- dada(filtFs, err = errF, multithread = T, pool = "pseudo")
-dadaRs <- dada(filtRs, err = errR, multithread = T, pool = "pseudo")
+dadaFs <- dada(filtFs, err = errF, multithread = FALSE, pool = "pseudo")
+dadaRs <- dada(filtRs, err = errR, multithread = FALSE, pool = "pseudo")
 
 # Apply the sample names extracted earlier (see above) to remove the long fastq.gz file names
 names(dadaFs) <- sample.names
@@ -549,7 +562,7 @@ merged <- sapply(mergers, getN)
 # Make sure the filterAndTrim output has the same row names
 # as the samples that are still present
 out <- as.data.frame(out)
-rownames(out) <- sample.names
+#rownames(out) <- sample.names
 
 # Build tracking table by matching sample names, not by row position
 track <- data.frame(
@@ -586,7 +599,7 @@ write.table(
 path    <- file.path("novaseq", "COI", "fastq_files")
 #batch_list <- list.files(path, pattern = "Batch")
 batch_list <- c(
-  "Batch_7","Batch_9", "Batch_10"
+  "Batch_10"
 )
 # run load filter_and_trim function on each batch
 
